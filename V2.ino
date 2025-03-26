@@ -2,43 +2,80 @@
 // 1. obstacle clearance (ultrasonic)
 // 2. return to charging station (IR)
 #include "MeMCore.h"
+// initialization
+uint8_t motorSpeed = 100;// -255 to 255
+int weightThreshold = 1000;  
+int buzzerFrequency = 2000; 
+int buzzerDuration = 500;
+// pins
+const int FSR_PIN = A0;// analog input
+const int IR_PIN = A1;// analog input 
+const int BUZZER_PIN = 9;// analog output
+
 void setup() {
-  Serial.begin(9600);
-  // ports
   MeDCMotor leftMotor(M1);
   MeDCMotor rightMotor(M2);
   MeLineFollower lineFinder(PORT_3);
-
-  // pins
-  const int FSR_PIN = A0;     
-  const int BUZZER_PIN = 3;
-
-  // initialization
-  uint8_t motorSpeed = 100;
-  int weightThreshold = 1000;  
-  int buzzerFrequency = 2000; 
-  int buzzerDuration = 500;
+  MeUltrasonicSensor ultraSensor(PORT_4);
+  
+  pinMode(FSR_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
 
 }
 
-void turnRight() {
+// movement functions
+void foward() {
   leftMotor.run(motorSpeed);
+  rightMotor.run(motorSpeed);
+}
+
+void backword() {
+  leftMotor.run(-motorSpeed);
   rightMotor.run(-motorSpeed);
-  delay(600);
+}
+
+void stop() {
   leftMotor.stop();
   rightMotor.stop();
 }
-void circumvent () {}
 
+void turnLeft(int time) {
+  leftMotor.run(-motorSpeed);
+  rightMotor.run(motorSpeed);
+  delay(time);
+  stop();
+}
 
-void loop() {
+void turnRight(int time) {
+  leftMotor.run(motorSpeed);
+  rightMotor.run(-motorSpeed);
+  delay(time);
+  stop();
+}
+
+// sensor functions
+int calcHeadDistance() {// ultrasonic sensor
+  int distance = ultraSensor.distanceCm();
+  return distance;
+}
+
+int calcIrDistance() { // IR sensor
+  int sensorValue = analogRead(IR_PIN);
+  return sensorValue;
+}
+
+int testBoundary() {// line follower
   int sensorState = lineFinder.readSensors();
-  if (sensorState == S1_OUT_S2_OUT) {//Sensor 1 and 2 are outside of black line
-    leftMotor.run(motorSpeed);
-    rightMotor.run(motorSpeed);
+  return sensorState;
+}
+
+//main loop
+void loop() {
+  int boundaryState = testBoundary();
+  if (boundaryState == S1_OUT_S2_OUT) {// within boundary
+    foward();
   }else {
-    leftMotor.stop();
-    rightMotor.stop();
+    stop();
     turnRight();
   }
   delay(200);
