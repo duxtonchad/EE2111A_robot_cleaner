@@ -11,7 +11,7 @@ int leftTurn = 0;
 int time4turn90 = 1000;
 // pins
 const int FSR_PIN = A0;// analog input
-const int IR_PIN = A1;// analog input 
+const int IR_PIN = 3;// analog input 
 const int BUZZER_PIN = 9;// analog output
 
 void setup() {
@@ -156,105 +156,83 @@ void loop() {
   maxWeightExceededAlarm();
 }
 
-void goForward(int speed=100);
-void turnRight(int speed=100);
-void turnLeft(int speed=100);
-void stopMotors();
-bool checkIR();
-void approachStation();
-void searchForStation();
-
-#include <MeMCore.h>
-#include <SoftwareSerial.h>
-
-MeInfraredReceiver infraredReceiverDecode(PORT_6);
 
 
-// Motors
-MeDCMotor leftMotor(M1);  // Left motor
-MeDCMotor rightMotor(M2); // Right motor
 
-// IR sensor
-MeIR ir;
 
-// Replace with your charging station's IR code
-const unsigned long CHARGING_STATION_CODE = 0xFFA25D;
 
-// Movement speeds
 
-const int Motorspeed = 100;
-const int TURN_TIME = 300; // ms to turn
+const int stopDistance = 15;  
+const unsigned long searchTime = 2000; 
+
+// Variables
+bool irSignalDetected = false;
+unsigned long lastDetectionTime = 0;
 
 void setup() {
-  Serial.begin(9600);
-  ir.begin();
-  Serial.println("mBot Charging Station Finder Ready!");
+  pinMode(IR_PIN, INPUT);
 }
 
 void loop() {
-  if (checkIR()) { // If charging station is detected
-    approachStation();
-  } else {
-    searchForStation();
+  int irValue = digitalRead(IR_PIN);
+  if (irValue == HIGH) {
+    irSignalDetected = true;
+    lastDetectionTime = millis();
+    safeforward();
+   
+  } 
+  else {
+   
+    if (irSignalDetected && (millis() - lastDetectionTime < searchTime)) {
+      
+      safeforward();
+    }
+    else if (irSignalDetected) {
+      
+      irSignalDetected = false;
+      searchForSignal();
+    }
   }
-}
-
-bool checkIR() {
-   if (ir.keyPressed(IR_BUTTON_A)) {  // Example button check
-    // For custom codes, we'd normally use:
-    // unsigned long code = ir.getCode();
-    // return (code == CHARGING_STATION_CODE);
-    return true;
-  }
-  return false;
-}
-
-void approachStation() {
-  Serial.println("Charging station detected! Moving forward...");
-  goForward();
-  delay(1000); // Move forward for 1 second
-  stopMotors();
-  Serial.println("Reached charging station!");
-  delay(5000); // Simulate charging
-}
-
-void searchForStation() {
-  Serial.println("Searching...");
+   float distance = calcHeadDistance();  // Get current distance
+  if (distance > 0 && distance < stopDistance) { 
+    stop();
   
-  // Alternate between left and right turns
-  static bool turnDirection = false; // false = left, true = right
+}
+
+
+void searchForSignal() {
+
+  unsigned long searchStartTime = millis();
   
-  if (turnDirection) {
-    Serial.println("Turning right");
-    turnRight();
-  } else {
-    Serial.println("Turning left");
-    turnLeft();
+  while (millis() - searchStartTime < searchTime) {
+   
+    leftMotor.run(-100);
+    rightMotor.run(100);
+    
+    
+    if (digitalRead(irSensorPin) == HIGH) {
+      irSignalDetected = true;
+      lastDetectionTime = millis();
+      return;
+    }
+    
+    delay(50); // Small delay to prevent overwhelming the sensor
   }
   
-  delay(TURN_TIME);
-  stopMotors();
-  delay(200); // Brief pause
-  turnDirection = !turnDirection; // Switch direction next time
-}
-
-// Movement functions
-void goForward(int speed=100) {
-  leftMotor.run(100);
-  rightMotor.run(100); // Negative because motors are mounted opposite
-}
-
-void turnRight(int speed=100) {
-  leftMotor.run(100);
-  rightMotor.run(-100); // Both same direction = turn
-}
-
-void turnLeft(int speed=100) {
-  leftMotor.run(-100);
-  rightMotor.run(100); // Both same opposite direction = turn
-}
-
-void stopMotors() {
-  leftMotor.stop();
-  rightMotor.stop();
+  searchStartTime = millis();
+  while (millis() - searchStartTime < searchTime) {
+   
+    leftMotor.run(100);
+    rightMotor.run(-100);
+    
+    if (digitalRead(irSensorPin) == HIGH) {
+      irSignalDetected = true;
+      lastDetectionTime = millis();
+      return;
+    }
+    
+    delay(50); 
+  }
+    stop();
+ 
 }
